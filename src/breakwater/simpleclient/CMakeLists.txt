@@ -1,23 +1,23 @@
-project(simpleserver)
+project(simpleclient)
 
 
 ####################################
 # src
 ####################################
-file(GLOB_RECURSE simpleserver_sources
+file(GLOB_RECURSE simpleclient_sources
   "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 
 ####################################
 # create executable target
 ####################################
-add_executable(simpleserver
-  ${simpleserver_sources})
+add_executable(simpleclient
+  ${simpleclient_sources})
 
 
 ####################################
 # include directories
 ####################################
-target_include_directories(simpleserver
+target_include_directories(simpleclient
   PRIVATE
     $<BUILD_INTERFACE:${lucene++_BINARY_DIR}/include>
     $<BUILD_INTERFACE:${lucene++_SOURCE_DIR}/include/lucene++>
@@ -29,7 +29,7 @@ target_include_directories(simpleserver
 ####################################
 # dependencies
 ####################################
-target_link_libraries(simpleserver
+target_link_libraries(simpleclient
   PRIVATE
     Boost::boost
     Boost::date_time
@@ -44,6 +44,6 @@ target_link_libraries(simpleserver
     ${Shenango_RUNTIME_LIBS}
     ${Breakwater_LIBS})
 
-set_target_properties(simpleserver
+set_target_properties(simpleclient
   PROPERTIES
     LINK_FLAGS "-T ${Shenango_PATH}/base/base.ld")
