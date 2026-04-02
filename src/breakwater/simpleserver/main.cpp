@@ -160,7 +160,8 @@ void PopulateIndex() {
 
   std::string line;
   String wline;
-  std::ifstream tweet_txt("2021-11-27-dataset-text.tsv");
+  // std::ifstream tweet_txt("2021-11-27-dataset-text.tsv");
+  std::ifstream tweet_txt("synthetic_dataset_for_lucene.tsv");
 
   if (!tweet_txt.is_open()) {
     std::cout << "Unable to open file" << std::endl;
