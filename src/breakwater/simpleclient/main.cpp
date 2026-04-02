@@ -1,15 +1,19 @@
 extern "C" {
 #include <base/log.h>
 #include <runtime/runtime.h>
+#include <net/ip.h>
 }
 
 #include "cc/net.h"
 #include "cc/runtime.h"
+#include "cc/thread.h"
 #include "breakwater/rpc++.h"
 
 #include <iostream>
 #include <random>
 #include <chrono>
+#include <vector>
+#include <memory>
 
 const struct crpc_ops *crpc_ops;
 
@@ -25,22 +29,25 @@ int threads;
 uint64_t num_terms;
 double target_rps;
 
-using namespace std::chrono;
-
 void ClientWorker(int id) {
-  rpc::RpcClient c(raddr, id + 1);
+  // Use the static Dial method which returns a std::unique_ptr<rpc::RpcClient>
+  // Signature: Dial(remote_addr, priority, on_closed_cb, arg, info_ptr)
+  auto c = rpc::RpcClient::Dial(raddr, id + 1, nullptr, nullptr, nullptr);
+  
+  if (!c) {
+    std::cerr << "Thread " << id << ": Failed to dial server" << std::endl;
+    return;
+  }
 
   std::mt19937 rng(id);
   std::uniform_int_distribution<uint64_t> term_dist(0, num_terms - 1);
 
+  // Calculate pacing
   double per_thread_rps = target_rps / threads;
-  double interval_us = 1000000.0 / per_thread_rps;
+  uint64_t interval_us = static_cast<uint64_t>(1000000.0 / per_thread_rps);
 
   char resp[4096];
-
   uint64_t req_id = 0;
-
-  auto next_send = steady_clock::now();
 
   while (true) {
     payload p;
@@ -48,20 +55,21 @@ void ClientWorker(int id) {
     p.index = req_id++;
     p.hash = rand();
 
-    ssize_t ret = c.Send(&p, sizeof(p), p.index, nullptr);
+    // Use -> since 'c' is a unique_ptr
+    ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
     if (ret != sizeof(p)) {
+      rt::Yield(); // Yield if send fails to prevent tight spinning
       continue;
     }
 
     // receive response (blocking)
-    ret = c.Recv(resp, sizeof(resp), 0, nullptr);
+    ret = c->Recv(resp, sizeof(resp), 0, nullptr);
     if (ret <= 0) {
       continue;
     }
 
-    // pace requests
-    next_send += microseconds((int)interval_us);
-    std::this_thread::sleep_until(next_send);
+    // Use Caladan-native sleep to yield the green thread without blocking the CPU core
+    rt::Sleep(interval_us);
   }
 }
 
@@ -69,6 +77,7 @@ void MainHandler(void *arg) {
   std::vector<rt::Thread> workers;
 
   for (int i = 0; i < threads; i++) {
+    // Caladan threads are spawned using rt::Thread([lambda])
     workers.emplace_back(rt::Thread([=] { ClientWorker(i); }));
   }
 
@@ -95,14 +104,23 @@ int main(int argc, char *argv[]) {
     crpc_ops = &cnc_ops;
   }
 
-  threads = std::stoi(argv[4]);
+  try {
+    threads = std::stoi(argv[4]);
+    num_terms = std::stoull(argv[6]);
+    target_rps = std::stod(argv[7]);
+  } catch (...) {
+    std::cerr << "Invalid arguments\n";
+    return -EINVAL;
+  }
 
-  if (StringToAddr(argv[5], &raddr.ip)) return -EINVAL;
+  // StringToAddr is available because of #include <net/ip.h>
+  if (StringToAddr(argv[5], &raddr.ip)) {
+    std::cerr << "Invalid server IP\n";
+    return -EINVAL;
+  }
   raddr.port = 8001;
 
-  num_terms = std::stoull(argv[6]);
-  target_rps = std::stod(argv[7]);
-
+  // Initialize the Caladan runtime
   int ret = runtime_init(argv[2], MainHandler, NULL);
   if (ret) {
     std::cerr << "runtime init failed\n";
