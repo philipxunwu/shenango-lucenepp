@@ -8,6 +8,7 @@ extern "C" {
 #include "cc/runtime.h"
 #include "cc/thread.h"
 #include "breakwater/rpc++.h"
+#include "cc/timer.h"
 
 #include <iostream>
 #include <random>
@@ -22,6 +23,15 @@ struct payload {
   uint64_t index;
   uint64_t hash;
 };
+
+int StringToAddr(const char *str, uint32_t *addr) {
+  uint8_t a, b, c, d;
+
+  if (sscanf(str, "%hhu.%hhu.%hhu.%hhu", &a, &b, &c, &d) != 4) return -EINVAL;
+
+  *addr = MAKE_IP_ADDR(a, b, c, d);
+  return 0;
+}
 
 netaddr raddr;
 
