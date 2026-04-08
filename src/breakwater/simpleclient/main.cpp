@@ -28,10 +28,9 @@ netaddr raddr;
 int threads;
 uint64_t num_terms;
 double target_rps;
+uint64_t completed_reqs = 0;
 
 void ClientWorker(int id) {
-  // Use the static Dial method which returns a std::unique_ptr<rpc::RpcClient>
-  // Signature: Dial(remote_addr, priority, on_closed_cb, arg, info_ptr)
   auto c = rpc::RpcClient::Dial(raddr, id + 1, nullptr, nullptr, nullptr);
   
   if (!c) {
@@ -55,7 +54,7 @@ void ClientWorker(int id) {
     p.index = req_id++;
     p.hash = rand();
 
-    // Use -> since 'c' is a unique_ptr
+
     ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
     if (ret != sizeof(p)) {
       rt::Yield(); // Yield if send fails to prevent tight spinning
@@ -66,9 +65,14 @@ void ClientWorker(int id) {
     ret = c->Recv(resp, sizeof(resp), 0, nullptr);
     if (ret <= 0) {
       continue;
+    } else {
+      completed_reqs++; 
     }
 
-    // Use Caladan-native sleep to yield the green thread without blocking the CPU core
+    if (completed_reqs % 10000 == 0) {
+        std::cout << "Thread " << id << " finished " << completed_reqs << " requests." << std::endl;
+    }
+
     rt::Sleep(interval_us);
   }
 }
