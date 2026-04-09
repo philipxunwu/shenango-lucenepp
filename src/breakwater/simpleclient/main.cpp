@@ -1,20 +1,3 @@
-// extern "C" {
-// #include <base/log.h>
-// #include <runtime/runtime.h>
-// #include <net/ip.h>
-// }
-
-// #include "cc/net.h"
-// #include "cc/runtime.h"
-// #include "cc/thread.h"
-// #include "breakwater/rpc++.h"
-// #include "cc/timer.h"
-
-// #include <iostream>
-// #include <random>
-// #include <chrono>
-// #include <vector>
-// #include <memory>
 
 extern "C" {
 #include <base/time.h>
@@ -33,7 +16,6 @@ extern "C" {
 #include "cc/sync.h"
 #include "cc/thread.h"
 #include "cc/timer.h"
-#include "proto.h"
 #include "breakwater/rpc++.h"
 
 #include <algorithm>
