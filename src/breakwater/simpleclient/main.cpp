@@ -53,6 +53,7 @@ extern "C" {
 #include <ctime>
 
 const struct crpc_ops *crpc_ops;
+const struct srpc_ops *srpc_ops; 
 
 struct payload {
   uint64_t term_index;
