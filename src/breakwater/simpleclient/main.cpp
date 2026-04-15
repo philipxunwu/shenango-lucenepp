@@ -32,6 +32,7 @@ extern "C"
 #include <string>
 #include <utility>
 #include <vector>
+#include <atomic>
 
 #include <ctime>
 
@@ -43,6 +44,8 @@ using TermGen = std::function<uint64_t()>;
 
 constexpr uint64_t kMaxCatchUpUS = 5;
 constexpr uint64_t kRTT = 10;
+constexpr uint64_t kWarmUpTime = 4000000;
+constexpr uint64_t kExperimentTime = 8000000;
 
 struct payload
 {
@@ -62,7 +65,7 @@ struct work_unit
   // uint64_t term_index; 
   // uint64_t index; 
   // uint64_t hash; 
-}
+}; 
 
 int
 StringToAddr(const char *str, uint32_t *addr)
@@ -88,38 +91,22 @@ uint64_t completed_reqs = 0;
 // work factory generates a batch of work units for the client to execute.
 // uses poisson distribution to calculate dispatch times for each request in the batch
 
-void PoissonExperimentHandler(void *arg) {
-  rt::WaitGroup starter(threads); 
-  rt::WaitGroup starter2(1); 
-  std::atomic<uint64_t> global_success_count{0};
-hton64(term_dist(rng));
 
-
-  std::vector<rt::Thread> th;
-  std::unique_ptr<std::vector<work_unit>> samples[threads];
-  for (int i = 0; i < threads; ++i) {
-    th.emplace_back(rt::Thread([&, i] {
-
-      auto v = ClientWorker(i, &starter, &starter2, global_success_count, [=] {
-              std::mt19937 rg(rand());
-              std::exponential_distribution<double> rd(
-                  1.0 / (1000000.0 / (target_rps / static_cast<double>(threads))));
-              return GenerateWork(std::bind(rd, rg), 0, kExperimentTime);
-
-      samples[i].reset(new std::vector<work_unit>(std::move(v)));
-    }));
-  } 
-
-  starter.Wait(); 
-  starter2.Done(); 
-
-  auto start = steady_clock::now();
-  for (auto &t : th) t.Join();
-  auto finish = steady_clock::now();
-
-  double elapsed_ = duration_cast<sec>(finish - start).count();
-
-  // after this, handle extracting all the information from samples and printing results   
+std::vector<work_unit> GenerateWork(Arrival a, double cur_us, double last_us) {
+  uint64_t req_id = 0; 
+  std::vector<work_unit> w;
+  while (true) {
+    cur_us += a();
+    if (cur_us > last_us) break;
+    w.emplace_back(work_unit{
+      cur_us,                     // start_us 
+      0,                          // latency_us             
+      0,                          // tsc_end 
+      false,                      // sent
+      false,                      // received
+    });
+  }
+  return w;
 }
 
 std::vector<work_unit> OpenLoopClientWorker(
@@ -213,27 +200,38 @@ std::vector<work_unit> OpenLoopClientWorker(
   return work 
 }
 
-void GenerateWork(Arrival a, double cur_us, double last_us) {
-  uint64_t req_id = 0; 
-  std::vector<work_unit> w;
-  while (true) {
-    cur_us += a();
-    if (cur_us > last_us) break;
-    w.emplace_back(work_unit{
-      cur_us,                     // start_us 
-      0,                          // latency_us             
-      0,                          // tsc_end 
-      false,                      // sent
-      false,                      // received
-    });
-  }
-  return w;
+
+void PoissonExperimentHandler(void *arg) {
+  rt::WaitGroup starter(threads); 
+  rt::WaitGroup starter2(1); 
+  std::atomic<uint64_t> global_success_count{0};
+
+  std::vector<rt::Thread> th;
+  std::unique_ptr<std::vector<work_unit>> samples[threads];
+  for (int i = 0; i < threads; ++i) {
+    th.emplace_back(rt::Thread([&, i] {
+
+      std::vector<work_unit> v = OpenLoopClientWorker(i, &starter, &starter2, global_success_count, [=] {
+              std::mt19937 rg(rand());
+              std::exponential_distribution<double> rd(
+                  1.0 / (1000000.0 / (target_rps / static_cast<double>(threads))));
+              return GenerateWork(std::bind(rd, rg), 0, kExperimentTime);
+
+      samples[i].reset(new std::vector<work_unit>(std::move(v)));
+    })));
+  } 
+
+  starter.Wait(); 
+  starter2.Done(); 
+
+  auto start = steady_clock::now();
+  for (auto &t : th) t.Join();
+  auto finish = steady_clock::now();
+
+  double elapsed_ = duration_cast<sec>(finish - start).count();
+
+  // after this, handle extracting all the information from samples and printing results   
 }
-
-
-
-
-
 
 
 void SimpleClientWorker(int id)
