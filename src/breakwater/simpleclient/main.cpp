@@ -114,7 +114,7 @@ std::vector<work_unit> OpenLoopClientWorker(
     // rpc::RpcClient *client,
     rt::WaitGroup *starter,
     rt::WaitGroup *starter2,
-    std::atomic<uint64_t> &global_completed_reqs
+    std::atomic<uint64_t> &global_completed_reqs, 
     std::function<std::vector<work_unit>()> work_factory
 ) {
 
@@ -126,7 +126,7 @@ std::vector<work_unit> OpenLoopClientWorker(
   if (!c)
   {
     std::cerr << "Thread " << id << ": Failed to dial server" << std::endl;
-    return;
+    return {}; 
   }
 
   std::vector<work_unit> work = work_factory();
@@ -185,10 +185,10 @@ std::vector<work_unit> OpenLoopClientWorker(
     ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
 
     // Send an RPC request.
-    if (ret == sizeop(p)) 
+    if (ret == sizeof(p)) 
       work[i].sent = true; 
     if (ret == -ENOBUFS) continue;
-    if (ret != static_cast<ssize_t>(buflen))
+    if (ret != static_cast<ssize_t>(sizeof(p)))
       panic("write failed, ret = %ld", ret);
   }
 
