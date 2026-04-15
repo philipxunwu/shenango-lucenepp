@@ -242,6 +242,7 @@ void RPCSStatServer() {
 }
 
 void RequestHandler(struct srpc_ctx *ctx) {
+  std::cout << "Received request\n" << std::flush;
   if (unlikely(ctx->req_len != sizeof(payload))) {
     log_err("got invalid RPC len %ld", ctx->req_len);
     return;
@@ -264,6 +265,7 @@ void RequestHandler(struct srpc_ctx *ctx) {
   }*/
 
   ctx->resp_len = sizeof(payload);
+  ctx->drop = false; 
   payload *out = reinterpret_cast<payload *>(ctx->resp_buf);
   memcpy(out, in, sizeof(*out));
 }
