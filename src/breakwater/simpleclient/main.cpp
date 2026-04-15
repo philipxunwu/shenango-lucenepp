@@ -36,6 +36,9 @@ extern "C"
 
 #include <ctime>
 
+using namespace std::chrono;
+using sec = duration<double, std::micro>;
+
 const struct crpc_ops *crpc_ops;
 const struct srpc_ops *srpc_ops;
 
@@ -219,8 +222,8 @@ void PoissonExperimentHandler(void *arg) {
         return GenerateWork(std::bind(rd, rg), 0, kExperimentTime);
       });
       
-      // samples[i].reset(new std::vector<work_unit>(std::move(v)));
-      samples[i] = std::make_unique<std::vector<work_unit>>(std::move(v));
+      samples[i].reset(new std::vector<work_unit>(std::move(v)));
+      // samples[i] = std::make_unique<std::vector<work_unit>>(std::move(v));
     })); 
   } 
 
