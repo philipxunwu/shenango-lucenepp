@@ -146,9 +146,9 @@ std::vector<work_unit> OpenLoopClientWorker(
       payload *msg = reinterpret_cast<payload *>(resp_buf);
       uint64_t idx = msg->index; 
 
-      if (idx < w.size()) {
-        w[idx].latency_us = now - timings[idx]; 
-        w[idx].received = true;
+      if (idx < work.size()) {
+        work[idx].latency_us = now - timings[idx]; 
+        work[idx].received = true;
         global_completed_reqs.fetch_add(1, std::memory_order_relaxed);
       }
   } }); 
@@ -179,7 +179,7 @@ std::vector<work_unit> OpenLoopClientWorker(
     timings[i] = microtime();
   
     p.term_index = hton64(term_dist(rng));
-    p.index = hton64(req_id++);
+    p.index = hton64(i);
     p.hash = hton64(rand());
 
     ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
@@ -195,9 +195,9 @@ std::vector<work_unit> OpenLoopClientWorker(
   // rt::Sleep(1 * rt::kSeconds);
   rt::Sleep((int)(kRTT + 2));
   BUG_ON(c->Shutdown(SHUT_RDWR));
-  th.Join();
+  receiver_th.Join();
 
-  return work 
+  return work; 
 }
 
 
@@ -210,15 +210,18 @@ void PoissonExperimentHandler(void *arg) {
   std::unique_ptr<std::vector<work_unit>> samples[threads];
   for (int i = 0; i < threads; ++i) {
     th.emplace_back(rt::Thread([&, i] {
-
-      std::vector<work_unit> v = OpenLoopClientWorker(i, &starter, &starter2, global_success_count, [=] {
-              std::mt19937 rg(rand());
-              std::exponential_distribution<double> rd(
-                  1.0 / (1000000.0 / (target_rps / static_cast<double>(threads))));
-              return GenerateWork(std::bind(rd, rg), 0, kExperimentTime);
-
-      samples[i].reset(new std::vector<work_unit>(std::move(v)));
-    })));
+      std::random_device rd_device;
+      std::mt19937 rg(rd_device() + i); 
+  
+      double thread_rps = target_rps / static_cast<double>(threads);
+      std::exponential_distribution<double> rd(1.0 / (1000000.0 / thread_rps));
+      std::vector<work_unit> v = OpenLoopClientWorker(i, &starter, &starter2, global_success_count, [&rg, &rd] {
+        return GenerateWork(std::bind(rd, rg), 0, kExperimentTime);
+      });
+      
+      // samples[i].reset(new std::vector<work_unit>(std::move(v)));
+      samples[i] = std::make_unique<std::vector<work_unit>>(std::move(v));
+    })); 
   } 
 
   starter.Wait(); 
