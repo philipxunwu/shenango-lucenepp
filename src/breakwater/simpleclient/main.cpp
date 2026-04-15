@@ -317,7 +317,7 @@ void MainHandler(void *arg)
     std::cerr << "Spawning worker thread " << i << "\n"
               << std::endl;
     workers.emplace_back(rt::Thread([=]
-                                    { ClientWorker(i); }));
+                                    { SimpleClientWorker(i); }));
   }
 
   for (auto &t : workers)
