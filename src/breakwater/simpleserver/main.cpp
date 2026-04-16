@@ -250,19 +250,10 @@ void RequestHandler(struct srpc_ctx *ctx) {
   const payload *in = reinterpret_cast<const payload *>(ctx->req_buf);
   int core_id = get_current_affinity();
 
-  /*if (dir->isCongested()) {
-    ctx->drop = true;
-  } else {*/
-    // Perform work
-    QueryPtr query = newLucene<TermQuery>(newLucene<Term>(L"contents", terms[ntoh64(in->term_index)]));
-    TopDocsPtr result = searchers[core_id]->search(query, FilterPtr(), searchN);
-    Collection<ScoreDocPtr> hits = result->scoreDocs;
-  //}
-
-  /*if (!ctx->drop) {
-    atomic64_fetch_and_add(&acc_hits, hits.size());
-    atomic64_inc(&num_resp);
-  }*/
+  
+  QueryPtr query = newLucene<TermQuery>(newLucene<Term>(L"contents", terms[ntoh64(in->term_index)]));
+  TopDocsPtr result = searchers[core_id]->search(query, FilterPtr(), searchN);
+  Collection<ScoreDocPtr> hits = result->scoreDocs;
 
   ctx->resp_len = sizeof(payload);
   ctx->drop = false; 
