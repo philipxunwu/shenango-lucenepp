@@ -135,7 +135,8 @@ std::vector<work_unit> OpenLoopClientWorker(
   std::vector<work_unit> work = work_factory();
 
   std::vector<uint64_t> timings;
-  timings.reserve(work.size());
+  // timings.reserve(work.size());
+  timings.resize(work.size()); 
 
   auto receiver_th = rt::Thread([&]{
 
@@ -147,7 +148,7 @@ std::vector<work_unit> OpenLoopClientWorker(
       uint64_t now = microtime();
             
       payload *msg = reinterpret_cast<payload *>(resp_buf);
-      uint64_t idx = msg->index; 
+      uint64_t idx = ntoh64(msg->index); 
 
       if (idx < work.size()) {
         work[idx].latency_us = now - timings[idx]; 
