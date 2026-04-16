@@ -256,6 +256,7 @@ void PoissonExperimentHandler(void *arg) {
   std::cout << "Total completed requests: " << global_success_count.load() << "\n";
   std::cout << "Elapsed time: " << elapsed_ << " seconds\n";
   for (int i = 0; i < threads; ++i) {
+    std::cout << "Thread " << i << " work units:\n";
     auto &v = *samples[i];
     for (auto &w : v) {
       PrintWorkUnit(w);
