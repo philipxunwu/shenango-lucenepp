@@ -64,6 +64,7 @@ struct work_unit
   uint64_t tsc_end;
   bool sent; 
   bool received;
+  uint64_t window;
 
   uint64_t term_index; 
   // uint64_t index; 
@@ -98,6 +99,7 @@ void PrintWorkUnit(work_unit &w) {
             << ", tsc_end: " << w.tsc_end
             << ", sent: " << w.sent
             << ", received: " << w.received
+            << ", window: " << w.window
             // << ", index: " << w.index
             // << ", hash: " << w.hash
             << "\n";
@@ -119,6 +121,7 @@ std::vector<work_unit> GenerateWork(Arrival a, double cur_us, double last_us) {
       0,                          // tsc_end 
       false,                      // sent
       false,                      // received
+      0,                          // window 
       0                           // term_index
     });
   }
@@ -205,6 +208,7 @@ std::vector<work_unit> OpenLoopClientWorker(
     // Send an RPC request.
     if (ret == sizeof(p)) 
       work[i].sent = true; 
+      work[i].window = c->Credit(); 
       // work[i].term_index = ntoh64(p.term_index);
     if (ret == -ENOBUFS) continue;
     if (ret != static_cast<ssize_t>(sizeof(p)))
