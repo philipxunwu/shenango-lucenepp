@@ -65,7 +65,7 @@ struct work_unit
   bool sent; 
   bool received;
 
-  // uint64_t term_index; 
+  uint64_t term_index; 
   // uint64_t index; 
   // uint64_t hash; 
 }; 
@@ -91,6 +91,18 @@ uint64_t completed_reqs = 0;
 
 
 
+void PrintWorkUnit(work_unit &w) {
+  std::cout << "term_index: " << w.term_index
+            << ", start_us: " << w.start_us
+            << ", latency_us: " << w.latency_us
+            << ", tsc_end: " << w.tsc_end
+            << ", sent: " << w.sent
+            << ", received: " << w.received
+            // << ", index: " << w.index
+            // << ", hash: " << w.hash
+            << "\n";
+}
+
 // work factory generates a batch of work units for the client to execute.
 // uses poisson distribution to calculate dispatch times for each request in the batch
 
@@ -107,6 +119,7 @@ std::vector<work_unit> GenerateWork(Arrival a, double cur_us, double last_us) {
       0,                          // tsc_end 
       false,                      // sent
       false,                      // received
+      0                           // term_index
     });
   }
   return w;
@@ -153,6 +166,7 @@ std::vector<work_unit> OpenLoopClientWorker(
       if (idx < work.size()) {
         work[idx].latency_us = now - timings[idx]; 
         work[idx].received = true;
+        work[idx].term_index = ntoh64(msg->term_index);
         global_completed_reqs.fetch_add(1, std::memory_order_relaxed);
       }
   } }); 
@@ -191,6 +205,7 @@ std::vector<work_unit> OpenLoopClientWorker(
     // Send an RPC request.
     if (ret == sizeof(p)) 
       work[i].sent = true; 
+      // work[i].term_index = ntoh64(p.term_index);
     if (ret == -ENOBUFS) continue;
     if (ret != static_cast<ssize_t>(sizeof(p)))
       panic("write failed, ret = %ld", ret);
@@ -238,6 +253,14 @@ void PoissonExperimentHandler(void *arg) {
   double elapsed_ = duration_cast<sec>(finish - start).count();
 
   // after this, handle extracting all the information from samples and printing results   
+  std::cout << "Total completed requests: " << global_success_count.load() << "\n";
+  std::cout << "Elapsed time: " << elapsed_ << " seconds\n";
+  for (int i = 0; i < threads; ++i) {
+    auto &v = *samples[i];
+    for (auto &w : v) {
+      PrintWorkUnit(w);
+    } 
+  } 
 }
 
 
