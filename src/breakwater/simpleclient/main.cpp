@@ -137,8 +137,8 @@ std::vector<work_unit> OpenLoopClientWorker(
     std::function<std::vector<work_unit>()> work_factory
 ) {
 
-  std::cout << "Inside ClientWorker " << id << "\n"
-            << std::flush;
+  // std::cout << "Inside ClientWorker " << id << "\n"
+  //           << std::flush;
 
   struct rpc_session_info info = {.session_type = 0};
   std::unique_ptr<rpc::RpcClient> c(rpc::RpcClient::Dial(raddr, id + 1, nullptr, nullptr, &info));
@@ -206,9 +206,10 @@ std::vector<work_unit> OpenLoopClientWorker(
     ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
 
     // Send an RPC request.
-    if (ret == sizeof(p)) 
+    if (ret == sizeof(p)) {
       work[i].sent = true; 
       work[i].window = c->Credit(); 
+    }
       // work[i].term_index = ntoh64(p.term_index);
     if (ret == -ENOBUFS) continue;
     if (ret != static_cast<ssize_t>(sizeof(p)))
@@ -257,23 +258,70 @@ void PoissonExperimentHandler(void *arg) {
   double elapsed_ = duration_cast<sec>(finish - start).count();
 
   // after this, handle extracting all the information from samples and printing results   
-  std::cout << "Total completed requests: " << global_success_count.load() << "\n";
-  std::cout << "Elapsed time: " << elapsed_ << " seconds\n";
+  // std::cout << "Total completed requests: " << global_success_count.load() << "\n";
+  // std::cout << "Elapsed time: " << elapsed_ << " seconds\n";
+  // for (int i = 0; i < threads; ++i) {
+  //   std::cout << "Thread " << i << " work units:\n";
+  //   auto &v = *samples[i];
+  //   for (auto &w : v) {
+  //     PrintWorkUnit(w);
+  //   } 
+  // } 
+  std::vector<double> latencies;
+  uint64_t sent = 0;
+  uint64_t received = 0;
+
   for (int i = 0; i < threads; ++i) {
-    std::cout << "Thread " << i << " work units:\n";
     auto &v = *samples[i];
+
     for (auto &w : v) {
-      PrintWorkUnit(w);
-    } 
-  } 
+      if (w.sent) sent++;
+
+      // filter out warmup
+      if (w.received && w.start_us > kWarmUpTime) {
+        received++;
+        latencies.push_back(w.latency_us);
+      }
+    }
+  }
+
+  if (latencies.empty()) {
+    std::cout << "ERROR" << std::endl;
+    return;
+  }
+
+  std::sort(latencies.begin(), latencies.end());
+
+  double count = latencies.size();
+
+  auto pct = [&](double p) {
+    return latencies[std::min((size_t)(p * count), latencies.size() - 1)];
+  };
+
+  double mean = std::accumulate(latencies.begin(), latencies.end(), 0.0) / count;
+
+  double p50   = pct(0.50);
+  double p90   = pct(0.90);
+  double p99   = pct(0.99);
+  double p999  = pct(0.999);
+  double p9999 = pct(0.9999);
+
+  // throughput metrics
+  double elapsed_us = elapsed_; // already in microseconds
+  double throughput = sent / elapsed_us * 1e6;
+  double offered_load = sent / elapsed_us * 1e6;
+  double goodput = received / elapsed_us * 1e6;
+
+  // drop rate
+  double drop_rate = (sent > 0) ? (double)(sent - received) / sent : 0;
 }
 
 
 void SimpleClientWorker(int id)
 {
 
-  std::cout << "Inside ClientWorker " << id << "\n"
-            << std::flush;
+  // std::cout << "Inside ClientWorker " << id << "\n"
+  //           << std::flush;
 
   struct rpc_session_info info = {.session_type = 0};
   // auto c = rpc::RpcClient::Dial(raddr, id + 1, nullptr, nullptr, nullptr);
@@ -295,8 +343,8 @@ void SimpleClientWorker(int id)
   char resp[4096];
   uint64_t req_id = 0;
 
-  std::cout << "Entering request loop\n"
-            << std::flush;
+  // std::cout << "Entering request loop\n"
+  //           << std::flush;
   while (true)
   {
     payload p;
@@ -304,7 +352,7 @@ void SimpleClientWorker(int id)
     p.index = req_id++;
     p.hash = rand();
 
-    std::cout << "Sending request" << std::flush;
+    // std::cout << "Sending request" << std::flush;
     ssize_t ret = c->Send(&p, sizeof(p), p.index, nullptr);
     if (ret != sizeof(p))
     {
@@ -314,7 +362,7 @@ void SimpleClientWorker(int id)
 
     // receive response (blocking)
     ret = c->Recv(resp, sizeof(resp), 0, nullptr);
-    std::cout << "Received response" << std::flush;
+    // std::cout << "Received response" << std::flush;
     if (ret <= 0)
     {
       continue;
@@ -324,20 +372,20 @@ void SimpleClientWorker(int id)
       completed_reqs++;
     }
 
-    if (completed_reqs % 10000 == 0)
-    {
-      std::cout << "Thread " << id << " finished " << completed_reqs << " requests." << std::flush;
-    }
+    // if (completed_reqs % 10000 == 0)
+    // {
+    //   std::cout << "Thread " << id << " finished " << completed_reqs << " requests." << std::flush;
+    // }
 
-    std::cout << "Sleeping" << std::flush;
+    // std::cout << "Sleeping" << std::flush;
     rt::Sleep(interval_us);
   }
 }
 
 void MainHandler(void *arg)
 {
-  std::cout << "In main handler\n"
-            << std::flush;
+  // std::cout << "In main handler\n"
+  //           << std::flush;
   std::vector<rt::Thread> workers;
 
   for (int i = 0; i < threads; i++)
@@ -359,9 +407,9 @@ void MainHandler(void *arg)
 
 void TestMainHandler(void *arg)
 {
-  std::cout << "In test main handler\n"
-            << std::flush;
-  printf("In test main handler\n");
+  // std::cout << "In test main handler\n"
+  //           << std::flush;
+  // printf("In test main handler\n");
 }
 
 int main(int argc, char *argv[])
@@ -421,23 +469,23 @@ int main(int argc, char *argv[])
     return -EINVAL;
   }
 
-  std::cout << "Parsed arguments\n"
-            << std::endl;
+  // std::cout << "Parsed arguments\n"
+  //           << std::endl;
 
   if (StringToAddr(argv[5], &raddr.ip))
   {
-    std::cout << "Invalid server IP\n"
-              << std::endl;
+    // std::cout << "Invalid server IP\n"
+    //           << std::endl;
     std::cerr << "Invalid server IP\n";
     return -EINVAL;
   }
-  std::cout << "Valid server IP\t" << std::flush;
+  // std::cout << "Valid server IP\t" << std::flush;
   raddr.port = 8001;
 
   // printf("%s:%d\n", raddr.ip, raddr.port);
 
   // ip_addr_to_str
-  std::cout << argv[5] << ":" << raddr.port << std::endl;
+  // std::cout << argv[5] << ":" << raddr.port << std::endl;
 
   // Initialize the Caladan runtime
   // int ret = runtime_init(argv[2], MainHandler, NULL);
@@ -446,8 +494,8 @@ int main(int argc, char *argv[])
   if (ret)
   {
     std::cerr << "runtime init failed\n";
-    std::cout << "Caladan runtime init failed\n"
-              << std::endl;
+    // std::cout << "Caladan runtime init failed\n"
+    //           << std::endl;
     return ret;
   }
 
